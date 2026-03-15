@@ -9,7 +9,8 @@ import { Upload, Image as ImageIcon, Sparkles, Loader2, Download, RefreshCw, Ale
 import { motion, AnimatePresence } from 'motion/react';
 
 // Third-party API configuration
-const API_ENDPOINT = 'https://api.jiekou.ai/v3/gemini-3.1-flash-image-text-to-image';
+const CHAT_API_ENDPOINT = 'https://api.jiekou.ai/openai/chat/completions';
+const IMAGE_API_ENDPOINT = 'https://api.jiekou.ai/v3/gemini-3.1-flash-image-text-to-image';
 const API_KEY = process.env.GEMINI_API_KEY || '';
 
 export default function App() {
@@ -46,18 +47,51 @@ export default function App() {
       const base64Data = selectedImage.split(',')[1];
       const mimeType = selectedImage.split(';')[0].split(':')[1];
 
-      const response = await fetch(API_ENDPOINT, {
+      // Step 1: Use gemini-2.5-flash to describe the person in the image
+      const visionResponse = await fetch(CHAT_API_ENDPOINT, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${API_KEY}`,
         },
         body: JSON.stringify({
-          prompt: "Transform the person in this image into a minimalist black and white cartoon caricature. The character should be in a 'hetui' (spitting) pose: puffed cheeks, a curved line representing spit coming from the mouth, and one hand with the index finger pointing upwards. The style should be clean, bold lines, similar to a funny social media sticker or meme. Below the character, add the text 'He~~tui' in a bold sans-serif font. The background should be pure white.",
-          image: {
-            data: base64Data,
-            mime_type: mimeType
-          },
+          model: 'gemini-2.5-flash',
+          messages: [
+            {
+              role: 'user',
+              content: [
+                {
+                  type: 'text',
+                  text: "Describe the person in this image in detail (hair, facial features, clothing, expression). Then, based on this description, write a prompt for an AI image generator to create a minimalist black and white cartoon caricature of this person in a 'hetui' (spitting) pose: puffed cheeks, a curved line representing spit coming from the mouth, and one hand with the index finger pointing upwards. The style should be clean, bold lines, white background. Only return the final prompt for the image generator.",
+                },
+                {
+                  type: 'image_url',
+                  image_url: {
+                    url: `data:${mimeType};base64,${base64Data}`,
+                  },
+                },
+              ],
+            },
+          ],
+        }),
+      });
+
+      if (!visionResponse.ok) {
+        throw new Error("Failed to analyze the image. Please try again.");
+      }
+
+      const visionData = await visionResponse.json();
+      const generatedPrompt = visionData.choices?.[0]?.message?.content || "A minimalist black and white cartoon caricature of a person in a spitting pose, bold lines, white background, text 'He~~tui' below.";
+
+      // Step 2: Use the generated prompt to call the gemini-3.1-flash-image API
+      const imageResponse = await fetch(IMAGE_API_ENDPOINT, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${API_KEY}`,
+        },
+        body: JSON.stringify({
+          prompt: generatedPrompt + " Add the text 'He~~tui' at the bottom of the image.",
           size: "1K",
           google: {
             web_search: false,
@@ -68,33 +102,21 @@ export default function App() {
         }),
       });
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error?.message || `API Error: ${response.status}`);
+      if (!imageResponse.ok) {
+        const errorData = await imageResponse.json().catch(() => ({}));
+        throw new Error(errorData.error?.message || `Image API Error: ${imageResponse.status}`);
       }
 
-      const data = await response.json();
+      const imageData = await imageResponse.json();
       
-      // Handle the image response from the new API
-      // Usually, Imagen 3 APIs via these proxies return a URL or base64 in a specific field
-      const imageUrl = data.url || data.image_url || data.data?.[0]?.url || data.generated_images?.[0]?.url;
-      const base64Image = data.base64 || data.image_base64 || data.data?.[0]?.b64_json;
-
-      if (imageUrl) {
-        setGeneratedImage(imageUrl);
-      } else if (base64Image) {
-        setGeneratedImage(`data:image/png;base64,${base64Image}`);
-      } else if (data.candidates?.[0]?.content?.parts) {
-        // Fallback for standard Gemini response structure
-        const part = data.candidates[0].content.parts.find((p: any) => p.inlineData);
-        if (part) {
-          setGeneratedImage(`data:image/png;base64,${part.inlineData.data}`);
-        } else {
-          throw new Error("No image data found in the response.");
-        }
+      // According to docs, response has 'image_urls' array
+      if (imageData.image_urls && imageData.image_urls.length > 0) {
+        setGeneratedImage(imageData.image_urls[0]);
+      } else if (imageData.url || imageData.image_url) {
+        setGeneratedImage(imageData.url || imageData.image_url);
       } else {
-        console.log("API Response:", data);
-        throw new Error("The API did not return a recognizable image format.");
+        console.log("Image API Response:", imageData);
+        throw new Error("The API did not return any image URLs.");
       }
     } catch (err: any) {
       console.error("Generation error:", err);
