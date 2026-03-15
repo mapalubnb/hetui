@@ -9,12 +9,19 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
+  // Global middleware
+  app.use(express.json({ limit: '20mb' }));
+  app.use((req, res, next) => {
+    console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+    next();
+  });
+
   // In-memory store for IP usage
   const ipUsage: Record<string, number> = {};
   const MAX_USAGE = 4;
 
   // API route for generation with rate limiting
-  app.post("/api/generate", express.json({ limit: '10mb' }), async (req, res) => {
+  app.post("/api/generate", async (req, res) => {
     const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
     const ipStr = Array.isArray(ip) ? ip[0] : ip || 'unknown';
 

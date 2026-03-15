@@ -56,10 +56,18 @@ export default function App() {
         }),
       });
 
-      const data = await response.json();
+      let data;
+      const contentType = response.headers.get("content-type");
+      if (contentType && contentType.includes("application/json")) {
+        data = await response.json();
+      } else {
+        const text = await response.text();
+        console.error("Non-JSON response:", text);
+        throw new Error(`服务器返回了非 JSON 响应 (状态码: ${response.status})。请检查后端服务是否正常运行。`);
+      }
 
       if (!response.ok) {
-        throw new Error(data.error?.message || `Error: ${response.status}`);
+        throw new Error(data.error?.message || `生成失败 (错误码: ${response.status})`);
       }
 
       setGeneratedImage(data.imageUrl);
