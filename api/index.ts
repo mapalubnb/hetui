@@ -15,7 +15,7 @@ const API_KEY = process.env.GEMINI_API_KEY || '';
 
 // In-memory IP tracking
 const ipLimits: Record<string, number> = {};
-const MAX_USES = 4;
+const MAX_USES = 10;
 
 async function startServer() {
   const app = express();
@@ -49,14 +49,15 @@ async function startServer() {
     }
 
     try {
-      const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
-      const ipStr = Array.isArray(ip) ? ip[0] : ip || 'unknown';
+      const ip = req.headers['x-forwarded-for'] || req.ip || req.socket?.remoteAddress;
+      const ipStr = Array.isArray(ip) ? ip[0] : (typeof ip === 'string' ? ip : 'unknown');
+      console.log(`Request from IP: ${ipStr}, Current Uses: ${ipLimits[ipStr] || 0}`);
 
       // Check limit
       const currentUses = ipLimits[ipStr] || 0;
       if (currentUses >= MAX_USES) {
         return res.status(429).json({ 
-          error: `Limit reached! Each IP can only spit 4 times. You've used all your spit.` 
+          error: `Limit reached! Each IP can only spit ${MAX_USES} times. You've used all your spit.` 
         });
       }
 
