@@ -18,15 +18,44 @@ export default function App() {
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        setError("Too big! Keep it under 5MB, buddy.");
+      if (file.size > 10 * 1024 * 1024) {
+        setError("Too big! Keep it under 10MB, buddy.");
         return;
       }
       const reader = new FileReader();
       reader.onloadend = () => {
-        setSelectedImage(reader.result as string);
-        setGeneratedImage(null);
-        setError(null);
+        const img = new Image();
+        img.onload = () => {
+          // Resize image to max 800px to save bandwidth and prevent timeouts
+          const canvas = document.createElement('canvas');
+          const MAX_WIDTH = 800;
+          const MAX_HEIGHT = 800;
+          let width = img.width;
+          let height = img.height;
+
+          if (width > height) {
+            if (width > MAX_WIDTH) {
+              height *= MAX_WIDTH / width;
+              width = MAX_WIDTH;
+            }
+          } else {
+            if (height > MAX_HEIGHT) {
+              width *= MAX_HEIGHT / height;
+              height = MAX_HEIGHT;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx?.drawImage(img, 0, 0, width, height);
+          
+          const resizedDataUrl = canvas.toDataURL('image/jpeg', 0.8);
+          setSelectedImage(resizedDataUrl);
+          setGeneratedImage(null);
+          setError(null);
+        };
+        img.src = reader.result as string;
       };
       reader.readAsDataURL(file);
     }
@@ -233,10 +262,42 @@ export default function App() {
                 <motion.div 
                   initial={{ scale: 0.8, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
-                  className="p-6 bg-red-500 text-white border-4 border-black font-bold flex items-center gap-4 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]"
+                  className="p-6 bg-red-500 text-white border-4 border-black font-bold flex flex-col gap-4 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]"
                 >
-                  <Ghost size={32} />
-                  <p className="text-xl uppercase tracking-tight">{error}</p>
+                  <div className="flex items-center gap-4">
+                    <Ghost size={32} />
+                    <p className="text-xl uppercase tracking-tight">{error}</p>
+                  </div>
+                  <div className="pt-4 border-t-2 border-black/20 flex flex-wrap gap-2">
+                    <button 
+                      onClick={async () => {
+                        try {
+                          const res = await fetch('/api/health');
+                          const data = await res.json();
+                          alert(`Server Health: ${JSON.stringify(data, null, 2)}`);
+                        } catch (e) {
+                          alert(`Health Check Failed: ${e}`);
+                        }
+                      }}
+                      className="bg-black text-white px-3 py-1 text-xs hover:bg-white hover:text-black transition-colors"
+                    >
+                      TEST SERVER
+                    </button>
+                    <button 
+                      onClick={async () => {
+                        try {
+                          const res = await fetch('/api/test-key');
+                          const data = await res.json();
+                          alert(`API Key Status: ${JSON.stringify(data, null, 2)}`);
+                        } catch (e) {
+                          alert(`Key Check Failed: ${e}`);
+                        }
+                      }}
+                      className="bg-black text-white px-3 py-1 text-xs hover:bg-white hover:text-black transition-colors"
+                    >
+                      TEST KEY
+                    </button>
+                  </div>
                 </motion.div>
               )}
             </section>
