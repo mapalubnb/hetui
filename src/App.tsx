@@ -4,12 +4,14 @@
  */
 
 import React, { useState, useRef } from 'react';
-import { GoogleGenAI } from "@google/genai";
+// Removed @google/genai import as we're switching to a third-party API
 import { Upload, Image as ImageIcon, Sparkles, Loader2, Download, RefreshCw, AlertCircle, Ghost, Zap, Flame } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
-// Initialize Gemini API
-const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
+// Third-party API configuration
+const API_BASE_URL = 'https://api.jiekou.ai/openai';
+const API_KEY = process.env.GEMINI_API_KEY || '';
+const MODEL_ID = 'gemini-2.5-flash';
 
 export default function App() {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
@@ -45,34 +47,61 @@ export default function App() {
       const base64Data = selectedImage.split(',')[1];
       const mimeType = selectedImage.split(';')[0].split(':')[1];
 
-      const response = await genAI.models.generateContent({
-        model: 'gemini-2.5-flash-image',
-        contents: {
-          parts: [
+      const response = await fetch(`${API_BASE_URL}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: MODEL_ID,
+          messages: [
             {
-              inlineData: {
-                data: base64Data,
-                mimeType: mimeType,
-              },
-            },
-            {
-              text: "Transform the person in this image into a minimalist black and white cartoon caricature. The character should be in a 'hetui' (spitting) pose: puffed cheeks, a curved line representing spit coming from the mouth, and one hand with the index finger pointing upwards. The style should be clean, bold lines, similar to a funny social media sticker or meme. Below the character, add the text 'He~~tui' in a bold sans-serif font. The background should be pure white.",
+              role: 'user',
+              content: [
+                {
+                  type: 'text',
+                  text: "Transform the person in this image into a minimalist black and white cartoon caricature. The character should be in a 'hetui' (spitting) pose: puffed cheeks, a curved line representing spit coming from the mouth, and one hand with the index finger pointing upwards. The style should be clean, bold lines, similar to a funny social media sticker or meme. Below the character, add the text 'He~~tui' in a bold sans-serif font. The background should be pure white. IMPORTANT: If you can generate an image, return it. If you are a text model, describe the caricature in extreme detail so I can visualize it, or if you have image generation capabilities, please use them.",
+                },
+                {
+                  type: 'image_url',
+                  image_url: {
+                    url: `data:${mimeType};base64,${base64Data}`,
+                  },
+                },
+              ],
             },
           ],
-        },
+        }),
       });
 
-      let foundImage = false;
-      for (const part of response.candidates?.[0]?.content?.parts || []) {
-        if (part.inlineData) {
-          setGeneratedImage(`data:image/png;base64,${part.inlineData.data}`);
-          foundImage = true;
-          break;
-        }
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error?.message || `API Error: ${response.status}`);
       }
 
-      if (!foundImage) {
-        throw new Error("The AI spit it back out. Try again!");
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content;
+
+      if (content) {
+        // Check if the content contains a base64 image or a URL
+        // Note: Standard chat completions usually return text. 
+        // If the third-party API supports image output for gemini-2.5-flash, 
+        // it might be in the content or a different field.
+        
+        const base64Match = content.match(/data:image\/[a-zA-Z]+;base64,[a-zA-Z0-9+/=]+/);
+        if (base64Match) {
+          setGeneratedImage(base64Match[0]);
+        } else if (content.includes('base64')) {
+          const rawBase64 = content.replace(/^.*base64,/, '').split(/[ \n\r\t"']/)[0].replace(/[^a-zA-Z0-9+/=]/g, '');
+          setGeneratedImage(`data:image/png;base64,${rawBase64}`);
+        } else {
+          // If it's just text, we show it as a "text meme" or error
+          console.log("Model response:", content);
+          setError("The API returned text instead of an image. Model 'gemini-2.5-flash' via chat/completions typically outputs text descriptions.");
+        }
+      } else {
+        throw new Error("No content returned from the API.");
       }
     } catch (err: any) {
       console.error("Generation error:", err);

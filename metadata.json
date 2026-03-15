@@ -1,5 +1,5 @@
 {
-  "name": "He-Tui Generator",
-  "description": "Upload a photo and transform it into a funny 'He-Tui' (spitting) caricature style image.",
+  "name": "Gemini 2.5 Flash Chat",
+  "description": "A powerful chat application powered by Gemini 2.5 Flash via Jiekou API.",
   "requestFramePermissions": []
 }
