@@ -45,9 +45,9 @@ export default function App() {
       const base64Data = selectedImage.split(',')[1];
       const mimeType = selectedImage.split(';')[0].split(':')[1];
 
-      console.log("Sending request to local proxy...");
+      console.log("Sending request to local proxy (OpenAI Protocol)...");
       
-      const response = await fetch('/api/generate', {
+      let response = await fetch('/api/generate', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -75,6 +75,36 @@ export default function App() {
         }),
       });
 
+      // If OpenAI protocol fails with 404, try Gemini Native Protocol
+      if (response.status === 404) {
+        console.warn("OpenAI protocol failed with 404, trying Gemini Native Protocol...");
+        response = await fetch('/api/generate', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          signal: controller.signal,
+          body: JSON.stringify({
+            isGeminiProtocol: true,
+            model: "gemini-2.5-flash",
+            payload: {
+              contents: [{
+                role: "user",
+                parts: [
+                  { text: "Transform the person in this image into a minimalist black and white cartoon caricature. The character should be in a 'hetui' (spitting) pose: puffed cheeks, a curved line representing spit coming from the mouth, and one hand with the index finger pointing upwards. The style should be clean, bold lines, similar to a funny social media sticker or meme. Below the character, add the text 'He~~tui' in a bold sans-serif font. The background should be pure white. IMPORTANT: You MUST generate this image and return it ONLY as a base64 encoded string (data:image/png;base64,...) in your response. Do not include any other text." },
+                  { inlineData: { mimeType, data: base64Data } }
+                ]
+              }],
+              generationConfig: {
+                thinkingConfig: {
+                  thinkingBudget: 1024
+                }
+              }
+            }
+          }),
+        });
+      }
+
       clearTimeout(timeoutId);
 
       if (!response.ok) {
@@ -92,9 +122,19 @@ export default function App() {
 
       const data = await response.json();
       console.log("API Response received:", data);
-      const content = data.choices?.[0]?.message?.content;
+      
+      let content = "";
+      
+      // Handle OpenAI format
+      if (data.choices?.[0]?.message?.content) {
+        content = data.choices[0].message.content;
+      } 
+      // Handle Gemini Native format
+      else if (data.candidates?.[0]?.content?.parts?.[0]?.text) {
+        content = data.candidates[0].content.parts[0].text;
+      }
 
-      if (typeof content === 'string') {
+      if (typeof content === 'string' && content.length > 0) {
         // Look for base64 pattern
         const base64Match = content.match(/data:image\/[a-zA-Z]+;base64,[a-zA-Z0-9+/=]+/);
         if (base64Match) {

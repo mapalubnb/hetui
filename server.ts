@@ -21,42 +21,52 @@ async function startServer() {
       return res.status(500).json({ error: { message: "Server configuration error: API Key missing." } });
     }
 
-    try {
-      // Try the standard OpenAI v1 path first
-      const targetUrl = 'https://api.jiekou.ai/openai/v1/chat/completions';
-      console.log(`Proxying request to: ${targetUrl}`);
-      
-      const response = await fetch(targetUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
-        },
-        body: JSON.stringify(req.body),
-      });
+    const { model, messages, isGeminiProtocol } = req.body;
 
-      if (response.status === 404) {
-        console.warn("404 detected on /v1 path, trying alternative path...");
-        // Fallback to the exact path provided in the user's guide
-        const fallbackUrl = 'https://api.jiekou.ai/openai/chat/completions';
-        const fallbackResponse = await fetch(fallbackUrl, {
+    try {
+      if (isGeminiProtocol) {
+        // Use Gemini Native Protocol
+        const targetUrl = `https://api.jiekou.ai/gemini/v1/models/${model}:generateContent`;
+        console.log(`Proxying to Gemini Native: ${targetUrl}`);
+        
+        const response = await fetch(targetUrl, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${apiKey}`
           },
-          body: JSON.stringify(req.body),
+          body: JSON.stringify(req.body.payload),
         });
-        
-        const data = await fallbackResponse.json();
-        return res.status(fallbackResponse.status).json(data);
-      }
 
-      const data = await response.json();
-      res.status(response.status).json(data);
+        const data = await response.json();
+        return res.status(response.status).json(data);
+      } else {
+        // Use OpenAI Protocol (Exact URL from docs)
+        const targetUrl = 'https://api.jiekou.ai/openai/chat/completions';
+        console.log(`Proxying to OpenAI Protocol: ${targetUrl}`);
+        
+        const response = await fetch(targetUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`
+          },
+          body: JSON.stringify({
+            model,
+            messages,
+            reasoning_effort: "low"
+          }),
+        });
+
+        const data = await response.json();
+        if (response.status === 404) {
+          console.error("OpenAI endpoint returned 404. Data:", data);
+        }
+        return res.status(response.status).json(data);
+      }
     } catch (error: any) {
       console.error("Proxy error:", error);
-      res.status(500).json({ error: { message: error.message || "Failed to proxy request to third-party API." } });
+      res.status(500).json({ error: { message: error.message || "Failed to proxy request." } });
     }
   });
 
