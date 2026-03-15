@@ -15,7 +15,7 @@ const API_KEY = process.env.GEMINI_API_KEY || '';
 
 // In-memory IP tracking
 const ipLimits: Record<string, number> = {};
-const MAX_USES = 10;
+const MAX_USES = 4;
 
 async function startServer() {
   const app = express();
@@ -29,19 +29,6 @@ async function startServer() {
   });
 
   app.use(express.json({ limit: '10mb' }));
-
-  app.get("/api/health", (req, res) => {
-    res.json({ status: "ok", time: new Date().toISOString(), env: process.env.NODE_ENV });
-  });
-
-  app.get("/api/test-key", (req, res) => {
-    const key = process.env.GEMINI_API_KEY;
-    res.json({ 
-      hasKey: !!key, 
-      keyLength: key?.length || 0,
-      prefix: key ? key.substring(0, 4) : null
-    });
-  });
 
   // API routes FIRST - use .all to handle method checks manually for better debugging
   app.all(["/api/generate", "/api/generate/"], async (req, res) => {

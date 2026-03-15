@@ -268,36 +268,6 @@ export default function App() {
                     <Ghost size={32} />
                     <p className="text-xl uppercase tracking-tight">{error}</p>
                   </div>
-                  <div className="pt-4 border-t-2 border-black/20 flex flex-wrap gap-2">
-                    <button 
-                      onClick={async () => {
-                        try {
-                          const res = await fetch('/api/health');
-                          const data = await res.json();
-                          alert(`Server Health: ${JSON.stringify(data, null, 2)}`);
-                        } catch (e) {
-                          alert(`Health Check Failed: ${e}`);
-                        }
-                      }}
-                      className="bg-black text-white px-3 py-1 text-xs hover:bg-white hover:text-black transition-colors"
-                    >
-                      TEST SERVER
-                    </button>
-                    <button 
-                      onClick={async () => {
-                        try {
-                          const res = await fetch('/api/test-key');
-                          const data = await res.json();
-                          alert(`API Key Status: ${JSON.stringify(data, null, 2)}`);
-                        } catch (e) {
-                          alert(`Key Check Failed: ${e}`);
-                        }
-                      }}
-                      className="bg-black text-white px-3 py-1 text-xs hover:bg-white hover:text-black transition-colors"
-                    >
-                      TEST KEY
-                    </button>
-                  </div>
                 </motion.div>
               )}
             </section>
@@ -347,6 +317,7 @@ export default function App() {
                       <div>
                         <p className="text-3xl font-display uppercase">Cooking the spit...</p>
                         <p className="font-bold opacity-50 mt-2">Patience is a virtue, memeing is an art.</p>
+                        <p className="text-xs font-bold mt-4 animate-pulse uppercase tracking-widest bg-black text-[#FFD700] px-2 py-1">API is under heavy load, please be patient.</p>
                       </div>
                     </motion.div>
                   ) : (
