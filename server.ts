@@ -22,8 +22,11 @@ async function startServer() {
     }
 
     try {
-      console.log("Proxying request to jiekou.ai...");
-      const response = await fetch('https://api.jiekou.ai/openai/chat/completions', {
+      // Try the standard OpenAI v1 path first
+      const targetUrl = 'https://api.jiekou.ai/openai/v1/chat/completions';
+      console.log(`Proxying request to: ${targetUrl}`);
+      
+      const response = await fetch(targetUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -31,6 +34,23 @@ async function startServer() {
         },
         body: JSON.stringify(req.body),
       });
+
+      if (response.status === 404) {
+        console.warn("404 detected on /v1 path, trying alternative path...");
+        // Fallback to the exact path provided in the user's guide
+        const fallbackUrl = 'https://api.jiekou.ai/openai/chat/completions';
+        const fallbackResponse = await fetch(fallbackUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`
+          },
+          body: JSON.stringify(req.body),
+        });
+        
+        const data = await fallbackResponse.json();
+        return res.status(fallbackResponse.status).json(data);
+      }
 
       const data = await response.json();
       res.status(response.status).json(data);
