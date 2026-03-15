@@ -20,10 +20,18 @@ async function startServer() {
   const ipUsage: Record<string, number> = {};
   const MAX_USAGE = 4;
 
-  // API route for generation with rate limiting
-  app.post("/api/generate", async (req, res) => {
+  // API Router
+  const apiRouter = express.Router();
+
+  apiRouter.get("/health", (req, res) => {
+    res.json({ status: "ok", message: "API is reachable" });
+  });
+
+  apiRouter.post("/generate", async (req, res) => {
     const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
     const ipStr = Array.isArray(ip) ? ip[0] : ip || 'unknown';
+
+    console.log(`Generation request from IP: ${ipStr}`);
 
     // Check usage
     const currentUsage = ipUsage[ipStr] || 0;
@@ -68,9 +76,16 @@ async function startServer() {
         }),
       });
 
-      if (!visionResponse.ok) throw new Error("图片分析失败");
+      if (!visionResponse.ok) {
+        const errText = await visionResponse.text();
+        console.error("Vision API Error:", errText);
+        throw new Error("图片分析失败");
+      }
+      
       const visionData: any = await visionResponse.json();
       const generatedPrompt = visionData.choices?.[0]?.message?.content;
+
+      if (!generatedPrompt) throw new Error("未能生成提示词");
 
       // Step 2: Generate image with gemini-3.1-flash-image
       const imageResponse = await fetch('https://api.jiekou.ai/v3/gemini-3.1-flash-image-text-to-image', {
@@ -88,7 +103,12 @@ async function startServer() {
         }),
       });
 
-      if (!imageResponse.ok) throw new Error("图片生成失败");
+      if (!imageResponse.ok) {
+        const errText = await imageResponse.text();
+        console.error("Image API Error:", errText);
+        throw new Error("图片生成失败");
+      }
+
       const imageData: any = await imageResponse.json();
       const imageUrl = imageData.image_urls?.[0] || imageData.url || imageData.image_url;
 
@@ -103,6 +123,8 @@ async function startServer() {
       res.status(500).json({ error: { message: error.message || "生成失败，请稍后重试。" } });
     }
   });
+
+  app.use("/api", apiRouter);
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
