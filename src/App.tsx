@@ -361,7 +361,7 @@ export default function App() {
             x: [0, 15, 0]
           }}
           transition={{ repeat: Infinity, duration: 4, ease: "easeInOut" }}
-          className="absolute top-[10%] left-[10%] text-8xl opacity-40 select-none drop-shadow-2xl"
+          className="absolute top-[10%] left-[10%] text-8xl opacity-80 select-none drop-shadow-2xl"
         >
           💦
         </motion.div>
@@ -372,7 +372,7 @@ export default function App() {
             x: [0, -15, 0]
           }}
           transition={{ repeat: Infinity, duration: 6, ease: "easeInOut" }}
-          className="absolute bottom-[15%] right-[10%] text-9xl opacity-40 select-none drop-shadow-2xl"
+          className="absolute bottom-[15%] right-[10%] text-9xl opacity-80 select-none drop-shadow-2xl"
         >
           👅
         </motion.div>
@@ -382,7 +382,7 @@ export default function App() {
             rotate: [0, 90, 0]
           }}
           transition={{ repeat: Infinity, duration: 3, ease: "easeInOut" }}
-          className="absolute top-[30%] right-[15%] text-7xl opacity-40 select-none drop-shadow-2xl"
+          className="absolute top-[30%] right-[15%] text-7xl opacity-80 select-none drop-shadow-2xl"
         >
           ✨
         </motion.div>
@@ -393,7 +393,7 @@ export default function App() {
             rotate: [0, -10, 0]
           }}
           transition={{ repeat: Infinity, duration: 5, ease: "easeInOut" }}
-          className="absolute bottom-[10%] left-[15%] text-8xl opacity-40 select-none drop-shadow-2xl"
+          className="absolute bottom-[10%] left-[15%] text-8xl opacity-80 select-none drop-shadow-2xl"
         >
           💦
         </motion.div>
@@ -403,7 +403,7 @@ export default function App() {
             scale: [0.8, 1.2, 0.8]
           }}
           transition={{ repeat: Infinity, duration: 8, ease: "linear" }}
-          className="absolute top-[50%] left-[5%] text-6xl opacity-30 select-none"
+          className="absolute top-[50%] left-[5%] text-6xl opacity-70 select-none"
         >
           💩
         </motion.div>
