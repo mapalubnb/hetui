@@ -53,10 +53,18 @@ export default function App() {
         }),
       });
 
-      const data = await response.json();
+      let data;
+      const contentType = response.headers.get("content-type");
+      if (contentType && contentType.includes("application/json")) {
+        data = await response.json();
+      } else {
+        const text = await response.text();
+        console.error("Non-JSON response:", text);
+        throw new Error(`Server returned non-JSON response (${response.status}). Please check server logs.`);
+      }
 
       if (!response.ok) {
-        throw new Error(data.error || "Failed to generate image.");
+        throw new Error(data.error || `Generation failed with status ${response.status}`);
       }
 
       setGeneratedImage(data.imageUrl);

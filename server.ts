@@ -26,24 +26,28 @@ async function startServer() {
 
   // API route for generation
   app.post("/api/generate", async (req, res) => {
-    const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
-    const ipStr = Array.isArray(ip) ? ip[0] : ip || 'unknown';
-
-    // Check limit
-    const currentUses = ipLimits[ipStr] || 0;
-    if (currentUses >= MAX_USES) {
-      return res.status(429).json({ 
-        error: `Limit reached! Each IP can only spit 4 times. You've used all your spit.` 
-      });
-    }
-
-    const { image, mimeType } = req.body;
-
-    if (!image || !mimeType) {
-      return res.status(400).json({ error: "Missing image data" });
-    }
-
     try {
+      const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+      const ipStr = Array.isArray(ip) ? ip[0] : ip || 'unknown';
+
+      // Check limit
+      const currentUses = ipLimits[ipStr] || 0;
+      if (currentUses >= MAX_USES) {
+        return res.status(429).json({ 
+          error: `Limit reached! Each IP can only spit 4 times. You've used all your spit.` 
+        });
+      }
+
+      const { image, mimeType } = req.body;
+
+      if (!image || !mimeType) {
+        return res.status(400).json({ error: "Missing image data. Please re-upload." });
+      }
+
+      if (!API_KEY) {
+        return res.status(500).json({ error: "API Key is not configured on the server." });
+      }
+
       // Step 1: Analyze image
       const visionResponse = await axios.post(CHAT_API_ENDPOINT, {
         model: 'gemini-2.5-flash',
