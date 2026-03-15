@@ -4,12 +4,8 @@
  */
 
 import React, { useState, useRef } from 'react';
-import { GoogleGenAI } from "@google/genai";
-import { Upload, Image as ImageIcon, Sparkles, Loader2, Download, RefreshCw, AlertCircle, Ghost, Zap, Flame } from 'lucide-react';
+import { Upload, ImageIcon, Sparkles, Loader2, Download, RefreshCw, AlertCircle, Ghost, Zap, Flame } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-
-// Initialize Gemini API
-const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
 
 export default function App() {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
@@ -45,34 +41,56 @@ export default function App() {
       const base64Data = selectedImage.split(',')[1];
       const mimeType = selectedImage.split(';')[0].split(':')[1];
 
-      const response = await genAI.models.generateContent({
-        model: 'gemini-2.5-flash-image',
-        contents: {
-          parts: [
+      // Using third-party API via fetch (OpenAI compatible format)
+      const response = await fetch('https://api.jiekou.ai/openai/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.GEMINI_API_KEY}`
+        },
+        body: JSON.stringify({
+          model: "gemini-2.5-flash",
+          messages: [
             {
-              inlineData: {
-                data: base64Data,
-                mimeType: mimeType,
-              },
-            },
-            {
-              text: "Transform the person in this image into a minimalist black and white cartoon caricature. The character should be in a 'hetui' (spitting) pose: puffed cheeks, a curved line representing spit coming from the mouth, and one hand with the index finger pointing upwards. The style should be clean, bold lines, similar to a funny social media sticker or meme. Below the character, add the text 'He~~tui' in a bold sans-serif font. The background should be pure white.",
+              role: "user",
+              content: [
+                {
+                  type: "text",
+                  text: "Transform the person in this image into a minimalist black and white cartoon caricature. The character should be in a 'hetui' (spitting) pose: puffed cheeks, a curved line representing spit coming from the mouth, and one hand with the index finger pointing upwards. The style should be clean, bold lines, similar to a funny social media sticker or meme. Below the character, add the text 'He~~tui' in a bold sans-serif font. The background should be pure white. IMPORTANT: Return the generated image as a base64 encoded string in your response.",
+                },
+                {
+                  type: "image_url",
+                  image_url: {
+                    url: `data:${mimeType};base64,${base64Data}`,
+                  },
+                },
+              ],
             },
           ],
-        },
+        }),
       });
 
-      let foundImage = false;
-      for (const part of response.candidates?.[0]?.content?.parts || []) {
-        if (part.inlineData) {
-          setGeneratedImage(`data:image/png;base64,${part.inlineData.data}`);
-          foundImage = true;
-          break;
-        }
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error?.message || `API Error: ${response.status}`);
       }
 
-      if (!foundImage) {
-        throw new Error("The AI spit it back out. Try again!");
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content;
+
+      // Try to find a base64 image in the response content
+      if (typeof content === 'string') {
+        const base64Match = content.match(/data:image\/[a-zA-Z]+;base64,[a-zA-Z0-9+/=]+/);
+        if (base64Match) {
+          setGeneratedImage(base64Match[0]);
+        } else if (content.length > 1000) {
+          // If the content itself looks like a raw base64 string
+          setGeneratedImage(`data:image/png;base64,${content.replace(/^data:image\/[a-z]+;base64,/, '')}`);
+        } else {
+          throw new Error("API returned text instead of an image. Please ensure the model supports image generation.");
+        }
+      } else {
+        throw new Error("No valid content received from the API.");
       }
     } catch (err: any) {
       console.error("Generation error:", err);
