@@ -57,7 +57,10 @@ async function startServer() {
       if (!API_KEY) {
         return res.status(500).json({ error: "API Key is not configured on the server." });
       }
-      console.log(`Using API Key: ${API_KEY.substring(0, 4)}...${API_KEY.substring(API_KEY.length - 4)}`);
+      const maskedKey = API_KEY.length > 8 
+        ? `${API_KEY.substring(0, 4)}...${API_KEY.substring(API_KEY.length - 4)}`
+        : "INVALID_KEY_FORMAT";
+      console.log(`Using API Key: ${maskedKey}`);
 
       // Step 1: Analyze image
       console.log("Analyzing image...");
@@ -85,7 +88,7 @@ async function startServer() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${API_KEY}`,
         },
-        timeout: 25000 // 25s timeout
+        timeout: 9000 // 9s timeout
       });
 
       const generatedPrompt = visionResponse.data.choices?.[0]?.message?.content || "A minimalist black and white cartoon caricature of a person in a spitting pose, bold lines, white background, text 'He~~tui' below.";
@@ -107,7 +110,7 @@ async function startServer() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${API_KEY}`,
         },
-        timeout: 25000 // 25s timeout
+        timeout: 9000 // 9s timeout
       });
 
       const imageData = imageResponse.data;
