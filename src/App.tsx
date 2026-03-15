@@ -9,9 +9,8 @@ import { Upload, Image as ImageIcon, Sparkles, Loader2, Download, RefreshCw, Ale
 import { motion, AnimatePresence } from 'motion/react';
 
 // Third-party API configuration
-const API_BASE_URL = 'https://api.jiekou.ai/openai';
+const API_ENDPOINT = 'https://api.jiekou.ai/v3/gemini-3.1-flash-image-text-to-image';
 const API_KEY = process.env.GEMINI_API_KEY || '';
-const MODEL_ID = 'gemini-2.5-flash';
 
 export default function App() {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
@@ -47,31 +46,25 @@ export default function App() {
       const base64Data = selectedImage.split(',')[1];
       const mimeType = selectedImage.split(';')[0].split(':')[1];
 
-      const response = await fetch(`${API_BASE_URL}/chat/completions`, {
+      const response = await fetch(API_ENDPOINT, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${API_KEY}`,
         },
         body: JSON.stringify({
-          model: MODEL_ID,
-          messages: [
-            {
-              role: 'user',
-              content: [
-                {
-                  type: 'text',
-                  text: "Transform the person in this image into a minimalist black and white cartoon caricature. The character should be in a 'hetui' (spitting) pose: puffed cheeks, a curved line representing spit coming from the mouth, and one hand with the index finger pointing upwards. The style should be clean, bold lines, similar to a funny social media sticker or meme. Below the character, add the text 'He~~tui' in a bold sans-serif font. The background should be pure white. IMPORTANT: If you can generate an image, return it. If you are a text model, describe the caricature in extreme detail so I can visualize it, or if you have image generation capabilities, please use them.",
-                },
-                {
-                  type: 'image_url',
-                  image_url: {
-                    url: `data:${mimeType};base64,${base64Data}`,
-                  },
-                },
-              ],
-            },
-          ],
+          prompt: "Transform the person in this image into a minimalist black and white cartoon caricature. The character should be in a 'hetui' (spitting) pose: puffed cheeks, a curved line representing spit coming from the mouth, and one hand with the index finger pointing upwards. The style should be clean, bold lines, similar to a funny social media sticker or meme. Below the character, add the text 'He~~tui' in a bold sans-serif font. The background should be pure white.",
+          image: {
+            data: base64Data,
+            mime_type: mimeType
+          },
+          size: "1K",
+          google: {
+            web_search: false,
+            image_search: false
+          },
+          aspect_ratio: "1:1",
+          output_format: "image/png"
         }),
       });
 
@@ -81,27 +74,27 @@ export default function App() {
       }
 
       const data = await response.json();
-      const content = data.choices?.[0]?.message?.content;
+      
+      // Handle the image response from the new API
+      // Usually, Imagen 3 APIs via these proxies return a URL or base64 in a specific field
+      const imageUrl = data.url || data.image_url || data.data?.[0]?.url || data.generated_images?.[0]?.url;
+      const base64Image = data.base64 || data.image_base64 || data.data?.[0]?.b64_json;
 
-      if (content) {
-        // Check if the content contains a base64 image or a URL
-        // Note: Standard chat completions usually return text. 
-        // If the third-party API supports image output for gemini-2.5-flash, 
-        // it might be in the content or a different field.
-        
-        const base64Match = content.match(/data:image\/[a-zA-Z]+;base64,[a-zA-Z0-9+/=]+/);
-        if (base64Match) {
-          setGeneratedImage(base64Match[0]);
-        } else if (content.includes('base64')) {
-          const rawBase64 = content.replace(/^.*base64,/, '').split(/[ \n\r\t"']/)[0].replace(/[^a-zA-Z0-9+/=]/g, '');
-          setGeneratedImage(`data:image/png;base64,${rawBase64}`);
+      if (imageUrl) {
+        setGeneratedImage(imageUrl);
+      } else if (base64Image) {
+        setGeneratedImage(`data:image/png;base64,${base64Image}`);
+      } else if (data.candidates?.[0]?.content?.parts) {
+        // Fallback for standard Gemini response structure
+        const part = data.candidates[0].content.parts.find((p: any) => p.inlineData);
+        if (part) {
+          setGeneratedImage(`data:image/png;base64,${part.inlineData.data}`);
         } else {
-          // If it's just text, we show it as a "text meme" or error
-          console.log("Model response:", content);
-          setError("The API returned text instead of an image. Model 'gemini-2.5-flash' via chat/completions typically outputs text descriptions.");
+          throw new Error("No image data found in the response.");
         }
       } else {
-        throw new Error("No content returned from the API.");
+        console.log("API Response:", data);
+        throw new Error("The API did not return a recognizable image format.");
       }
     } catch (err: any) {
       console.error("Generation error:", err);
