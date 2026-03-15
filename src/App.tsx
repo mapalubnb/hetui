@@ -4,7 +4,6 @@
  */
 
 import React, { useState, useRef } from 'react';
-// Removed @google/genai import as we're switching to a third-party API
 import { Upload, Image as ImageIcon, Sparkles, Loader2, Download, RefreshCw, AlertCircle, Ghost, Zap, Flame } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
