@@ -1,130 +1,121 @@
 import express from "express";
 import { createServer as createViteServer } from "vite";
 import path from "path";
+import { fileURLToPath } from "url";
 import dotenv from "dotenv";
+import axios from "axios";
 
 dotenv.config();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const CHAT_API_ENDPOINT = 'https://api.jiekou.ai/openai/chat/completions';
+const IMAGE_API_ENDPOINT = 'https://api.jiekou.ai/v3/gemini-3.1-flash-image-text-to-image';
+const API_KEY = process.env.GEMINI_API_KEY || '';
+
+// In-memory IP tracking
+const ipLimits: Record<string, number> = {};
+const MAX_USES = 4;
 
 async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  // Global middleware
-  app.use(express.json({ limit: '20mb' }));
-  app.use((req, res, next) => {
-    console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
-    next();
-  });
+  app.use(express.json({ limit: '10mb' }));
 
-  // In-memory store for IP usage
-  const ipUsage: Record<string, number> = {};
-  const MAX_USAGE = 4;
-
-  // API Router
-  const apiRouter = express.Router();
-
-  apiRouter.get("/health", (req, res) => {
-    res.json({ status: "ok", message: "API is reachable" });
-  });
-
-  apiRouter.post("/generate", async (req, res) => {
+  // API route for generation
+  app.post("/api/generate", async (req, res) => {
     const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
     const ipStr = Array.isArray(ip) ? ip[0] : ip || 'unknown';
 
-    console.log(`Generation request from IP: ${ipStr}`);
+    // Check limit
+    const currentUses = ipLimits[ipStr] || 0;
+    if (currentUses >= MAX_USES) {
+      return res.status(429).json({ 
+        error: `Limit reached! Each IP can only spit 4 times. You've used all your spit.` 
+      });
+    }
 
-    // Check usage
-    const currentUsage = ipUsage[ipStr] || 0;
-    if (currentUsage >= MAX_USAGE) {
-      return res.status(429).json({ error: { message: "您已达到今日使用上限（每个IP限4次）。" } });
+    const { image, mimeType } = req.body;
+
+    if (!image || !mimeType) {
+      return res.status(400).json({ error: "Missing image data" });
     }
 
     try {
-      const { image, mimeType } = req.body;
-      const API_KEY = process.env.GEMINI_API_KEY;
-
-      if (!API_KEY) {
-        throw new Error("服务器未配置 API Key");
-      }
-
-      // Step 1: Analyze image with gemini-2.5-flash
-      const visionResponse = await fetch('https://api.jiekou.ai/openai/chat/completions', {
-        method: 'POST',
+      // Step 1: Analyze image
+      const visionResponse = await axios.post(CHAT_API_ENDPOINT, {
+        model: 'gemini-2.5-flash',
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'text',
+                text: "Describe the person in this image in detail (hair, facial features, clothing, expression). Then, based on this description, write a prompt for an AI image generator to create a minimalist black and white cartoon caricature of this person in a 'hetui' (spitting) pose: puffed cheeks, a curved line representing spit coming from the mouth, and one hand with the index finger pointing upwards. The style should be clean, bold lines, white background. Only return the final prompt for the image generator.",
+              },
+              {
+                type: 'image_url',
+                image_url: {
+                  url: `data:${mimeType};base64,${image}`,
+                },
+              },
+            ],
+          },
+        ],
+      }, {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${API_KEY}`,
-        },
-        body: JSON.stringify({
-          model: 'gemini-2.5-flash',
-          messages: [
-            {
-              role: 'user',
-              content: [
-                {
-                  type: 'text',
-                  text: "Describe the person in this image in detail (hair, facial features, clothing, expression). Then, based on this description, write a prompt for an AI image generator to create a minimalist black and white cartoon caricature of this person in a 'hetui' (spitting) pose: puffed cheeks, a curved line representing spit coming from the mouth, and one hand with the index finger pointing upwards. The style should be clean, bold lines, white background. Only return the final prompt for the image generator.",
-                },
-                {
-                  type: 'image_url',
-                  image_url: {
-                    url: `data:${mimeType};base64,${image}`,
-                  },
-                },
-              ],
-            },
-          ],
-        }),
+        }
       });
 
-      if (!visionResponse.ok) {
-        const errText = await visionResponse.text();
-        console.error("Vision API Error:", errText);
-        throw new Error("图片分析失败");
-      }
-      
-      const visionData: any = await visionResponse.json();
-      const generatedPrompt = visionData.choices?.[0]?.message?.content;
+      const generatedPrompt = visionResponse.data.choices?.[0]?.message?.content || "A minimalist black and white cartoon caricature of a person in a spitting pose, bold lines, white background, text 'He~~tui' below.";
 
-      if (!generatedPrompt) throw new Error("未能生成提示词");
-
-      // Step 2: Generate image with gemini-3.1-flash-image
-      const imageResponse = await fetch('https://api.jiekou.ai/v3/gemini-3.1-flash-image-text-to-image', {
-        method: 'POST',
+      // Step 2: Generate image
+      const imageResponse = await axios.post(IMAGE_API_ENDPOINT, {
+        prompt: generatedPrompt + " Add the text 'He~~tui' at the bottom of the image.",
+        size: "1K",
+        google: {
+          web_search: false,
+          image_search: false
+        },
+        aspect_ratio: "1:1",
+        output_format: "image/png"
+      }, {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${API_KEY}`,
-        },
-        body: JSON.stringify({
-          prompt: generatedPrompt + " Add the text 'He~~tui' at the bottom of the image.",
-          size: "1K",
-          google: { web_search: false, image_search: false },
-          aspect_ratio: "1:1",
-          output_format: "image/png"
-        }),
+        }
       });
 
-      if (!imageResponse.ok) {
-        const errText = await imageResponse.text();
-        console.error("Image API Error:", errText);
-        throw new Error("图片生成失败");
+      const imageData = imageResponse.data;
+      let imageUrl = '';
+
+      if (imageData.image_urls && imageData.image_urls.length > 0) {
+        imageUrl = imageData.image_urls[0];
+      } else if (imageData.url || imageData.image_url) {
+        imageUrl = imageData.url || imageData.image_url;
       }
 
-      const imageData: any = await imageResponse.json();
-      const imageUrl = imageData.image_urls?.[0] || imageData.url || imageData.image_url;
+      if (!imageUrl) {
+        throw new Error("No image URL returned from API");
+      }
 
-      if (!imageUrl) throw new Error("未获取到图片链接");
+      // Increment limit on success
+      ipLimits[ipStr] = currentUses + 1;
 
-      // Increment usage count only on success
-      ipUsage[ipStr] = currentUsage + 1;
+      res.json({ 
+        imageUrl, 
+        remaining: MAX_USES - ipLimits[ipStr] 
+      });
 
-      res.json({ imageUrl, remaining: MAX_USAGE - ipUsage[ipStr] });
     } catch (error: any) {
-      console.error("Server Error:", error);
-      res.status(500).json({ error: { message: error.message || "生成失败，请稍后重试。" } });
+      console.error("Server error:", error.response?.data || error.message);
+      res.status(500).json({ error: "Failed to generate image. Please try again later." });
     }
   });
-
-  app.use("/api", apiRouter);
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {

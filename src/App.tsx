@@ -7,16 +7,12 @@ import React, { useState, useRef } from 'react';
 import { Upload, Image as ImageIcon, Sparkles, Loader2, Download, RefreshCw, AlertCircle, Ghost, Zap, Flame } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
-// Third-party API configuration
-const CHAT_API_ENDPOINT = 'https://api.jiekou.ai/openai/chat/completions';
-const IMAGE_API_ENDPOINT = 'https://api.jiekou.ai/v3/gemini-3.1-flash-image-text-to-image';
-const API_KEY = process.env.GEMINI_API_KEY || '';
-
 export default function App() {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [remainingUses, setRemainingUses] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -46,76 +42,26 @@ export default function App() {
       const base64Data = selectedImage.split(',')[1];
       const mimeType = selectedImage.split(';')[0].split(':')[1];
 
-      // Step 1: Use gemini-2.5-flash to describe the person in the image
-      const visionResponse = await fetch(CHAT_API_ENDPOINT, {
+      const response = await fetch('/api/generate', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${API_KEY}`,
         },
         body: JSON.stringify({
-          model: 'gemini-2.5-flash',
-          messages: [
-            {
-              role: 'user',
-              content: [
-                {
-                  type: 'text',
-                  text: "Describe the person in this image in detail (hair, facial features, clothing, expression). Then, based on this description, write a prompt for an AI image generator to create a minimalist black and white cartoon caricature of this person in a 'hetui' (spitting) pose: puffed cheeks, a curved line representing spit coming from the mouth, and one hand with the index finger pointing upwards. The style should be clean, bold lines, white background. Only return the final prompt for the image generator.",
-                },
-                {
-                  type: 'image_url',
-                  image_url: {
-                    url: `data:${mimeType};base64,${base64Data}`,
-                  },
-                },
-              ],
-            },
-          ],
+          image: base64Data,
+          mimeType: mimeType,
         }),
       });
 
-      if (!visionResponse.ok) {
-        throw new Error("Failed to analyze the image. Please try again.");
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to generate image.");
       }
 
-      const visionData = await visionResponse.json();
-      const generatedPrompt = visionData.choices?.[0]?.message?.content || "A minimalist black and white cartoon caricature of a person in a spitting pose, bold lines, white background, text 'He~~tui' below.";
-
-      // Step 2: Use the generated prompt to call the gemini-3.1-flash-image API
-      const imageResponse = await fetch(IMAGE_API_ENDPOINT, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${API_KEY}`,
-        },
-        body: JSON.stringify({
-          prompt: generatedPrompt + " Add the text 'He~~tui' at the bottom of the image.",
-          size: "1K",
-          google: {
-            web_search: false,
-            image_search: false
-          },
-          aspect_ratio: "1:1",
-          output_format: "image/png"
-        }),
-      });
-
-      if (!imageResponse.ok) {
-        const errorData = await imageResponse.json().catch(() => ({}));
-        throw new Error(errorData.error?.message || `Image API Error: ${imageResponse.status}`);
-      }
-
-      const imageData = await imageResponse.json();
-      
-      // According to docs, response has 'image_urls' array
-      if (imageData.image_urls && imageData.image_urls.length > 0) {
-        setGeneratedImage(imageData.image_urls[0]);
-      } else if (imageData.url || imageData.image_url) {
-        setGeneratedImage(imageData.url || imageData.image_url);
-      } else {
-        console.log("Image API Response:", imageData);
-        throw new Error("The API did not return any image URLs.");
+      setGeneratedImage(data.imageUrl);
+      if (data.remaining !== undefined) {
+        setRemainingUses(data.remaining);
       }
     } catch (err: any) {
       console.error("Generation error:", err);
@@ -201,6 +147,11 @@ export default function App() {
                 <p className="text-xl font-bold opacity-80 max-w-md">
                   Upload a victim's photo and let the AI do the dirty work. 
                 </p>
+                {remainingUses !== null && (
+                  <div className="inline-block bg-black text-[#FFD700] px-4 py-2 font-display text-xl uppercase rotate-1 border-2 border-black">
+                    Remaining Spits: {remainingUses}
+                  </div>
+                )}
               </div>
 
               <motion.div 
