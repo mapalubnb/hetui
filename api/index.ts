@@ -57,8 +57,10 @@ async function startServer() {
       if (!API_KEY) {
         return res.status(500).json({ error: "API Key is not configured on the server." });
       }
+      console.log(`Using API Key: ${API_KEY.substring(0, 4)}...${API_KEY.substring(API_KEY.length - 4)}`);
 
       // Step 1: Analyze image
+      console.log("Analyzing image...");
       const visionResponse = await axios.post(CHAT_API_ENDPOINT, {
         model: 'gemini-2.5-flash',
         messages: [
@@ -82,12 +84,15 @@ async function startServer() {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${API_KEY}`,
-        }
+        },
+        timeout: 25000 // 25s timeout
       });
 
       const generatedPrompt = visionResponse.data.choices?.[0]?.message?.content || "A minimalist black and white cartoon caricature of a person in a spitting pose, bold lines, white background, text 'He~~tui' below.";
+      console.log("Generated Prompt:", generatedPrompt);
 
       // Step 2: Generate image
+      console.log("Generating image...");
       const imageResponse = await axios.post(IMAGE_API_ENDPOINT, {
         prompt: generatedPrompt + " Add the text 'He~~tui' at the bottom of the image.",
         size: "1K",
@@ -101,7 +106,8 @@ async function startServer() {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${API_KEY}`,
-        }
+        },
+        timeout: 25000 // 25s timeout
       });
 
       const imageData = imageResponse.data;
@@ -126,8 +132,27 @@ async function startServer() {
       });
 
     } catch (error: any) {
-      console.error("Server error:", error.response?.data || error.message);
-      res.status(500).json({ error: "Failed to generate image. Please try again later." });
+      const errorData = error.response?.data;
+      const errorMessage = error.message;
+      console.error("Server error detail:", {
+        message: errorMessage,
+        data: errorData,
+        status: error.response?.status
+      });
+      
+      let userMessage = "Failed to generate image. Please try again later.";
+      if (errorMessage.includes("timeout")) {
+        userMessage = "The request timed out. AI generation is taking too long, please try a smaller image or try again.";
+      } else if (error.response?.status === 401) {
+        userMessage = "Invalid API Key. Please check server configuration.";
+      } else if (errorData?.error?.message) {
+        userMessage = `API Error: ${errorData.error.message}`;
+      }
+
+      res.status(500).json({ 
+        error: userMessage,
+        details: process.env.NODE_ENV === 'development' ? errorMessage : undefined
+      });
     }
   });
 
@@ -146,15 +171,24 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-  });
+  // Only listen if not in a serverless environment
+  if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`Server running on http://localhost:${PORT}`);
+    });
+  }
 
   return app;
 }
 
-export const appPromise = startServer();
+const appPromise = startServer();
+
 export default async (req: any, res: any) => {
-  const app = await appPromise;
-  app(req, res);
+  try {
+    const app = await appPromise;
+    app(req, res);
+  } catch (err) {
+    console.error("Catastrophic server error:", err);
+    res.status(500).send("Internal Server Error");
+  }
 };
