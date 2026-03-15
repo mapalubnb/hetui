@@ -1,5 +1,5 @@
 {
-  "name": "Gemini 2.5 Flash Chat",
-  "description": "A powerful chat application powered by Gemini 2.5 Flash via Jiekou API.",
+  "name": "He-Tui Meme Generator",
+  "description": "Transform your photos into hilarious 'He-Tui' (spitting) minimalist caricatures using AI.",
   "requestFramePermissions": []
 }

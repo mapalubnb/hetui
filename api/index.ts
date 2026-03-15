@@ -22,10 +22,20 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
+  // Log all requests for debugging
+  app.use((req, res, next) => {
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+    next();
+  });
+
   app.use(express.json({ limit: '10mb' }));
 
-  // API route for generation
-  app.post("/api/generate", async (req, res) => {
+  // API routes FIRST - use .all to handle method checks manually for better debugging
+  app.all(["/api/generate", "/api/generate/"], async (req, res) => {
+    if (req.method !== "POST") {
+      return res.status(405).json({ error: "Method Not Allowed. Please use POST." });
+    }
+
     try {
       const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
       const ipStr = Array.isArray(ip) ? ip[0] : ip || 'unknown';
