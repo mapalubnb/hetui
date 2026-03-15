@@ -36,18 +36,23 @@ export default function App() {
 
     setIsGenerating(true);
     setError(null);
+    console.log("Starting generation with third-party API...");
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
 
     try {
       const base64Data = selectedImage.split(',')[1];
       const mimeType = selectedImage.split(';')[0].split(':')[1];
 
-      // Using third-party API via fetch (OpenAI compatible format)
-      const response = await fetch('https://api.jiekou.ai/openai/chat/completions', {
+      console.log("Sending request to local proxy...");
+      
+      const response = await fetch('/api/generate', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.GEMINI_API_KEY}`
         },
+        signal: controller.signal,
         body: JSON.stringify({
           model: "gemini-2.5-flash",
           messages: [
@@ -56,7 +61,7 @@ export default function App() {
               content: [
                 {
                   type: "text",
-                  text: "Transform the person in this image into a minimalist black and white cartoon caricature. The character should be in a 'hetui' (spitting) pose: puffed cheeks, a curved line representing spit coming from the mouth, and one hand with the index finger pointing upwards. The style should be clean, bold lines, similar to a funny social media sticker or meme. Below the character, add the text 'He~~tui' in a bold sans-serif font. The background should be pure white. IMPORTANT: Return the generated image as a base64 encoded string in your response.",
+                  text: "Transform the person in this image into a minimalist black and white cartoon caricature. The character should be in a 'hetui' (spitting) pose: puffed cheeks, a curved line representing spit coming from the mouth, and one hand with the index finger pointing upwards. The style should be clean, bold lines, similar to a funny social media sticker or meme. Below the character, add the text 'He~~tui' in a bold sans-serif font. The background should be pure white. IMPORTANT: You MUST generate this image and return it ONLY as a base64 encoded string (data:image/png;base64,...) in your response. Do not include any other text.",
                 },
                 {
                   type: "image_url",
@@ -70,31 +75,51 @@ export default function App() {
         }),
       });
 
+      clearTimeout(timeoutId);
+
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error?.message || `API Error: ${response.status}`);
+        const errorText = await response.text();
+        console.error("API Error Response:", errorText);
+        let errorMessage = `API Error: ${response.status}`;
+        try {
+          const errorJson = JSON.parse(errorText);
+          errorMessage = errorJson.error?.message || errorMessage;
+        } catch (e) {
+          // Not JSON
+        }
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();
+      console.log("API Response received:", data);
       const content = data.choices?.[0]?.message?.content;
 
-      // Try to find a base64 image in the response content
       if (typeof content === 'string') {
+        // Look for base64 pattern
         const base64Match = content.match(/data:image\/[a-zA-Z]+;base64,[a-zA-Z0-9+/=]+/);
         if (base64Match) {
+          console.log("Found base64 image in content.");
           setGeneratedImage(base64Match[0]);
-        } else if (content.length > 1000) {
-          // If the content itself looks like a raw base64 string
-          setGeneratedImage(`data:image/png;base64,${content.replace(/^data:image\/[a-z]+;base64,/, '')}`);
+        } else if (content.trim().startsWith('iVBOR') || content.length > 500) {
+          // If it looks like raw base64 data (PNG starts with iVBOR)
+          console.log("Content looks like raw base64 data.");
+          const cleanBase64 = content.replace(/^data:image\/[a-z]+;base64,/, '').trim();
+          setGeneratedImage(`data:image/png;base64,${cleanBase64}`);
         } else {
-          throw new Error("API returned text instead of an image. Please ensure the model supports image generation.");
+          console.warn("API returned text but no image found:", content);
+          throw new Error("AI returned a description instead of an image. Try again or check if the model supports image generation.");
         }
       } else {
-        throw new Error("No valid content received from the API.");
+        throw new Error("Invalid response format from API.");
       }
     } catch (err: any) {
-      console.error("Generation error:", err);
-      setError(err.message || "Something went wrong. Maybe too much spit?");
+      clearTimeout(timeoutId);
+      console.error("Detailed generation error:", err);
+      if (err.name === 'AbortError') {
+        setError("Request timed out. The API is taking too long to respond.");
+      } else {
+        setError(err.message || "An unexpected error occurred.");
+      }
     } finally {
       setIsGenerating(false);
     }
