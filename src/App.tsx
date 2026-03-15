@@ -182,7 +182,7 @@ export default function App() {
                   <span className="bg-black text-[#FFD700] px-2 inline-block rotate-1">EVERYTHING.</span>
                 </motion.h2>
                 <p className="text-xl font-bold opacity-80 max-w-md">
-                  Upload a victim's photo and let the AI do the dirty work. 
+                  We’re all waiting for 何推, so why not generate our own hetui first?
                 </p>
                 {remainingUses !== null && (
                   <div className="inline-block bg-black text-[#FFD700] px-4 py-2 font-display text-xl uppercase rotate-1 border-2 border-black">
@@ -337,7 +337,7 @@ export default function App() {
               <div className="bg-black text-white p-8 border-4 border-black shadow-[8px_8px_0px_0px_rgba(255,215,0,1)] -rotate-1">
                 <p className="text-sm font-display uppercase text-[#FFD700] mb-2 tracking-widest">Meme Wisdom</p>
                 <p className="text-xl font-bold italic">
-                  "A picture is worth a thousand words, but a He-Tui is worth a million laughs."
+                  "Words are cheap, pics are fine… but He-Tui is timeless."
                 </p>
               </div>
             </section>
