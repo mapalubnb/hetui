@@ -19,6 +19,7 @@ const MAX_USES = 10;
 
 async function startServer() {
   const app = express();
+  app.set('trust proxy', true);
   const PORT = 3000;
 
   // Log all requests for debugging
@@ -101,7 +102,7 @@ async function startServer() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${API_KEY}`,
         },
-        timeout: 9000 // 9s timeout
+        timeout: 25000 // 25s timeout
       });
 
       const generatedPrompt = visionResponse.data.choices?.[0]?.message?.content || "A minimalist black and white cartoon caricature of a person in a spitting pose, bold lines, white background, text 'He~~tui' below.";
@@ -123,7 +124,7 @@ async function startServer() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${API_KEY}`,
         },
-        timeout: 9000 // 9s timeout
+        timeout: 25000 // 25s timeout
       });
 
       const imageData = imageResponse.data;
